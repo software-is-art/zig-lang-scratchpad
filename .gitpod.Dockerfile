@@ -1,5 +1,6 @@
 FROM gitpod/workspace-full
 
+USER root
 # Get Zig 0.7.0 
 RUN wget https://ziglang.org/download/0.7.0/zig-linux-x86_64-0.7.0.tar.xz
 # Extract XZ archive
