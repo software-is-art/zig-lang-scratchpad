@@ -2,5 +2,9 @@ image:
   file: .gitpod.Dockerfile
 
 tasks:
-  - init: 'echo "TODO: Replace with init/build command"'
-    command: 'echo "TODO: Replace with command to start project"'
+  - init: 'zig build'
+    command: 'zig build run'
+
+vscode:
+  extensions:
+    - tiehuis.zig@0.2.5:Yj8BTORJw/zERdoSGPf+eQ==
