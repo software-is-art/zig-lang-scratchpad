@@ -351,6 +351,183 @@ test "struct usage" {
     };
 }
 
+test "missing struct field" {
+    const my_vector = Vec3{
+        .x = 0,
+        .y = 100, // Comment out to break
+        .z = 50,
+    };
+}
+
+const Vec4 = struct {
+    x: f32, y: f32, z: f32 = 0, w: f32 = undefined
+};
+
+test "struct defaults" {
+    const my_vector = Vec4{
+        .x = 25,
+        .y = -50, 
+    };
+}
+
+const Stuff = struct {
+    x: i32,
+    y: i32,
+    fn swap(self: *Stuff) void {
+        const tmp = self.x;
+        self.x = self.y;
+        self.y = tmp;
+    }
+};
+
+test "automatic dereference" {
+    var thing = Stuff{ .x = 10, .y = 20 };
+    thing.swap();
+    expect(thing.x == 20);
+    expect(thing.y == 10);
+}
+
+const Payload = union {
+    int: i64,
+    float: f64,
+    bool: bool,
+};
+
+test "simple union" {
+    var payload = Payload{ .int = 1234 };
+    //payload.float = 12.34; // errors out
+}
+
+//const Tag = enum { a, b, c };
+//const Tagged = union(Tag) { a: u8, b: f32, c: bool };
+const Tagged = union(enum) { a: u8, b: f32, c: bool };
+const Tagged2 = union(enum) { a: u8, b: f32, c: bool, none };
+
+test "switch on tagged union" {
+    var value = Tagged{ .b = 1.5 };
+    switch (value) {
+        .a => |*byte| byte.* += 1,
+        .b => |*float| float.* *= 2,
+        .c => |*b| b.* = !b.*,
+    }
+    expect(value.b == 3);
+}
+
+const decimal_int: i32 = 98222;
+const hex_int: u8 = 0xff;
+const another_hex_int: u8 = 0xFF;
+const octal_int: u16 = 0o755;
+const binary_int: u8 = 0b11110000;
+
+const one_billion: u64 = 1_000_000_000;
+const binary_mask: u64 = 0b1_1111_1111;
+const permissions: u64 = 0o7_5_5;
+const big_address: u64 = 0xFF80_0000_0000_0000;
+
+test "integer widening" {
+    const a: u8 = 250;
+    const b: u16 = a;
+    const c: u32 = b;
+    expect(c == a);
+}
+
+test "@intCast" {
+    const x: u64 = 200;
+    const y = @intCast(u8, x);
+    expect(@TypeOf(y) == u8);
+}
+
+test "well defined overflow" {
+    var a: u8 = 255;
+    a +%= 1;
+    expect(a == 0);
+}
+
+test "float widening" {
+    const a: f16 = 0;
+    const b: f32 = a;
+    const c: f128 = b;
+    expect(c == @as(f128, a));
+}
+
+const floating_point: f64 = 123.0E+77;
+const another_float: f64 = 123.0;
+const yet_another: f64 = 123.0e+77;
+
+const hex_floating_point: f64 = 0x103.70p-5;
+const another_hex_float: f64 = 0x103.70;
+const yet_another_hex_float: f64 = 0x103.70P-5;
+
+const lightspeed: f64 = 299_792_458.000_000;
+const nanosecond: f64 = 0.000_000_001;
+const more_hex: f64 = 0x103.70P-5;
+
+test "int-float conversion" {
+    const a: i32 = 0;
+    const b = @intToFloat(f32, a);
+    const c = @floatToInt(i32, b);
+    expect(c == a);
+}
+
+test "labelled blocks" {
+    const count = blk: {
+        var sum: u32 = 0;
+        var i: u32 = 0;
+        while (i < 10) : (i += 1) sum += i;
+        break :blk sum;
+    };
+    expect(count == 45);
+    expect(@TypeOf(count) == u32);
+}
+
+test "nested continue" {
+    var count: usize = 0;
+    outer: for ([_]i32{ 1, 2, 3, 4, 5, 6, 7, 8 }) |_| {
+        for ([_]i32{ 1, 2, 3, 4, 5 }) |_| {
+            count += 1;
+            continue :outer;
+        }
+    }
+    expect(count == 8);
+}
+
+fn rangeHasNumber(begin: usize, end: usize, number: usize) bool {
+    var i = begin;
+    return while (i < end) : (i += 1) {
+        if (i == number) {
+            break true;
+        }
+    } else false;
+}
+
+test "while loop expression" {
+    expect(rangeHasNumber(0, 10, 3));
+}
+
+test "optional" {
+    var found_index: ?usize = null;
+    const data = [_]i32{ 1, 2, 3, 4, 5, 6, 7, 8, 12 };
+    for (data) |v, i| {
+        if (v == 10) found_index = i;
+    }
+    expect(found_index == null);
+}
+
+test "orelse" {
+    var a: ?f32 = null;
+    var b = a orelse 0;
+    expect(b == 0);
+    expect(@TypeOf(b) == f32);
+}
+
+test "orelse unreachable" {
+    const a: ?f32 = 5;
+    const b = a orelse unreachable;
+    const c = a.?;
+    expect(b == c);
+    expect(@TypeOf(c) == f32);
+}
+
 pub fn main() anyerror!void {
     const a = [_]u8{ 1, 2, 3 };
     std.log.info("Hello, {}!\n", .{"World"});
