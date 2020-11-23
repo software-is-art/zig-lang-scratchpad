@@ -528,6 +528,206 @@ test "orelse unreachable" {
     expect(@TypeOf(c) == f32);
 }
 
+test "if optional payload capture" {
+    const a: ?i32 = 5;
+    if (a != null) {
+        const value = a.?;
+    }
+    const b: ?i32 = 5;
+    if (b) |value| {}
+}
+
+var numbers_left: u32 = 4;
+fn eventuallyNullSequence() ?u32 {
+    if (numbers_left == 0) return null;
+    numbers_left -= 1;
+    return numbers_left;
+}
+
+test "while null capture" {
+    var sum: u32 = 0;
+    while (eventuallyNullSequence()) |value| {
+        sum += value;
+    }
+    expect(sum == 6);
+}
+
+test "comptime blocks" {
+    var x = comptime fibonacci(10);
+    var y = comptime blk: {
+        break :blk fibonacci(10);
+    };
+}
+
+test "comptime_int" {
+    const a = 12;
+    const b = a + 10;
+    const c: u4 = a;
+    const d: f32 = b;
+}
+
+test "branching on types" {
+    const a = 5;
+    const b: if (a < 10) f32 else i32 = 5;
+}
+
+fn Matrix(
+    comptime T: type,
+    comptime width: comptime_int,
+    comptime height: comptime_int
+) type {
+    return [height][width]T;
+}
+
+test "returning a type" {
+    expect(Matrix(f32, 4, 4) == [4][4]f32);
+}
+
+fn addSmallInts(comptime T: type, a: T, b: T) T {
+    return switch (@typeInfo(T)) {
+        .ComptimeInt => a + b,
+        .Int => |info| if (info.bits <= 16)
+            a + b
+        else
+            @compileError("ints too large"),
+        else => @compileError("only ints accepted"),
+    };
+}
+
+test "typeinfo switch" {
+    const x = addSmallInts(u16, 20, 30);
+    expect(@TypeOf(x) == u16);
+    expect(x == 50);
+}
+
+fn getBiggerInt(comptime T: type) type {
+    return @Type(.{
+        .Int = .{
+            .bits = @typeInfo(T).Int.bits + 1,
+            .is_signed = @typeInfo(T).Int.is_signed,
+        },
+    });
+}
+
+test "@Type" {
+    expect(getBiggerInt(u8) == u9);
+    expect(getBiggerInt(i31) == i32);
+}
+
+fn Vec(
+    comptime count: comptime_int,
+    comptime T: type,
+) type {
+    return struct {
+        data: [count]T,
+        const Self = @This();
+
+        fn abs(self: Self) Self {
+            var tmp = Self{ .data = undefined };
+            for (self.data) |elem, i| {
+                tmp.data[i] = if (elem < 0)
+                    -elem
+                else
+                    elem;
+            }
+            return tmp;
+        }
+
+        fn init(data: [count]T) Self {
+            return Self{ .data = data };
+        }
+    };
+}
+
+const eql = @import("std").mem.eql;
+
+test "generic vector" {
+    const x = Vec(3, f32).init([_]f32{ 10, -10, 5 });
+    const y = x.abs();
+    expect(eql(f32, &y.data, &[_]f32{ 10, 10, 5 }));
+}
+
+fn plusOne(x: anytype) @TypeOf(x) {
+    return x + 1;
+}
+
+test "inferred function parameter" {
+    expect(plusOne(@as(u32, 1)) == 2);
+}
+
+test "++" {
+    const x: [4]u8 = undefined;
+    const y = x[0..];
+
+    const a: [6]u8 = undefined;
+    const b = a[0..];
+
+    const new = y ++ b;
+    expect(new.len == 10);
+}
+
+test "**" {
+    const pattern = [_]u8{ 0xCC, 0xAA };
+    const memory = pattern ** 3;
+    expect(eql(
+        u8,
+        &memory,
+        &[_]u8{ 0xCC, 0xAA, 0xCC, 0xAA, 0xCC, 0xAA }
+    ));
+}
+
+test "inline for" {
+    const types = [_]type{ i32, f32, u8, bool };
+    var sum: usize = 0;
+    inline for (types) |T| sum += @sizeOf(T);
+    expect(sum == 10); 
+}
+
+test "anonymous struct literal" {
+    const Point = struct { x: i32, y: i32 };
+
+    var pt: Point = .{
+        .x = 13,
+        .y = 67,
+    };
+    expect(pt.x == 13);
+    expect(pt.y == 67);
+}
+
+fn dump(args: anytype) void {
+    expect(args.int == 1234);
+    expect(args.float == 12.34);
+    expect(args.b);
+    expect(args.s[0] == 'h');
+    expect(args.s[1] == 'i');
+}
+
+test "fully anonymous struct" {
+    dump(.{
+        .int = @as(u32, 1234),
+        .float = @as(f64, 12.34),
+        .b = true,
+        .s = "hi",
+    });
+}
+
+test "tuple" {
+    const values = .{
+        @as(u32, 1234),
+        @as(f64, 12.34),
+        true,
+        "hi",
+    } ++ .{false} ** 2;
+    expect(values[0] == 1234);
+    expect(values[4] == false);
+    inline for (values) |v, i| {
+        if (i != 2) continue;
+        expect(v);
+    }
+    expect(values.len == 6);
+    expect(values.@"3"[0] == 'h');
+}
+
 pub fn main() anyerror!void {
     const a = [_]u8{ 1, 2, 3 };
     std.log.info("Hello, {}!\n", .{"World"});
